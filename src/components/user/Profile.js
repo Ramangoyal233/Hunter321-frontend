@@ -61,9 +61,9 @@ const Profile = () => {
           dateOfBirth: response.data.dateOfBirth,
           gender: response.data.gender,
           address: response.data.address || { street: '', city: '', state: '', zip: '', country: '' },
-          bio: response.data.profile?.bio,
-          socialLinks: response.data.profile?.socialLinks,
-          skills: response.data.profile?.skills,
+          bio: response.data.profile?.bio || '',
+          socialLinks: response.data.profile?.socialLinks || { github: '', twitter: '', linkedin: '', website: '' },
+          skills: response.data.profile?.skills || [],
           location: response.data.location || { country: '', city: '' }
         }));
         if (response.data.profile?.avatar) {
@@ -84,10 +84,23 @@ const Profile = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // Handle nested object properties (e.g., socialLinks.github)
+    if (name.includes('.')) {
+      const [parentKey, childKey] = name.split('.');
+      setFormData(prev => ({
+        ...prev,
+        [parentKey]: {
+          ...prev[parentKey],
+          [childKey]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleProfileImageClick = () => {
