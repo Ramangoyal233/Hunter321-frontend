@@ -6,6 +6,17 @@ import toast from 'react-hot-toast';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
+// Helper function to get full URL for images
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL, return as is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // Otherwise, prepend the API base URL
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const AdminEditBookPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -257,7 +268,7 @@ const AdminEditBookPage = () => {
             {currentCoverImage && (
               <div className="mt-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Current cover image:</p>
-                <img src={currentCoverImage} alt="Current cover" className="mt-1 h-32 object-cover rounded" />
+                <img src={getImageUrl(currentCoverImage)} alt="Current cover" className="mt-1 h-32 object-cover rounded" />
               </div>
             )}
           </div>

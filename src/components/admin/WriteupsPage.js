@@ -19,6 +19,8 @@ import {
 } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -26,9 +28,27 @@ const WriteupsPage = () => {
   const { isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const [writeups, setWriteups] = useState([]);
+  const [filteredWriteups, setFilteredWriteups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedWriteup, setSelectedWriteup] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ show: false, writeupId: null, writeupTitle: '' });
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [writeupsPerPage] = useState(10);
+
+  // Filter state
+  const [filters, setFilters] = useState({
+    search: '',
+    category: '',
+    subcategory: '',
+    difficulty: '',
+    timeRange: 'all', // all, today, week, month, year
+    status: 'all', // all, published, draft
+    sortBy: 'newest' // newest, oldest, mostReads, leastReads, title
+  });
 
   const [stats, setStats] = useState({
     totalWriteups: 0,
@@ -36,7 +56,6 @@ const WriteupsPage = () => {
     thisMonthAdded: 0,
     totalReads: 0,
     todayReads: 0,
-    averageReads: 0,
     byDifficulty: {},
     byPlatform: {},
     byCategory: {},
@@ -44,7 +63,6 @@ const WriteupsPage = () => {
     monthlyStats: [],
     topCategories: [],
     topSubcategories: [],
-    topAuthors: [],
     readTrends: [],
     platformStats: {},
     difficultyStats: {},
@@ -79,7 +97,6 @@ const WriteupsPage = () => {
       }
     }
   });
-  const [selectedWriteup, setSelectedWriteup] = useState(null);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
 
@@ -91,6 +108,11 @@ const WriteupsPage = () => {
     fetchWriteups();
     fetchCategoriesAndSubcategories();
   }, [isAdmin, navigate]);
+
+  // Apply filters when they change
+  useEffect(() => {
+    applyFiltersAndPagination();
+  }, [filters, writeups]);
 
   const fetchWriteups = async () => {
     try {
@@ -105,6 +127,7 @@ const WriteupsPage = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setWriteups(response.data);
+      setFilteredWriteups(response.data); // Initialize filtered writeups with all writeups
       calculateStats(response.data);
     } catch (error) {
       if (error.response?.status === 401) {
@@ -168,7 +191,6 @@ const WriteupsPage = () => {
       monthlyStats: [],
       topCategories: [],
       topSubcategories: [],
-      topAuthors: [],
       readTrends: [],
       platformStats: {},
       difficultyStats: {},
@@ -384,20 +406,189 @@ const WriteupsPage = () => {
   };
 
   const handleDeleteWriteup = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this writeup?')) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        logout();
+        navigate('/admin/login');
+        return;
+      }
+
       await axios.delete(`${API_BASE_URL}/api/admin/writeups/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setWriteups(writeups.filter(writeup => writeup._id !== id));
-      calculateStats(writeups.filter(writeup => writeup._id !== id));
+
+      toast.success('Writeup deleted successfully');
+      fetchWriteups(); // Refresh the list
+      setDeleteModal({ show: false, writeupId: null, writeupTitle: '' });
     } catch (error) {
-      setError(error.response?.data?.message || 'Error deleting writeup');
+      if (error.response?.status === 401) {
+        logout();
+        navigate('/admin/login');
+      } else {
+        toast.error(error.response?.data?.message || 'Error deleting writeup');
+      }
     }
+  };
+
+  const handleTogglePublish = async (id, currentStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        logout();
+        navigate('/admin/login');
+        return;
+      }
+
+      await axios.patch(`${API_BASE_URL}/api/admin/writeups/${id}/publish`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      toast.success(currentStatus ? 'Writeup unpublished successfully' : 'Writeup published successfully');
+      fetchWriteups(); // Refresh the list
+    } catch (error) {
+      if (error.response?.status === 401) {
+        logout();
+        navigate('/admin/login');
+      } else {
+        toast.error(error.response?.data?.message || 'Error updating writeup status');
+      }
+    }
+  };
+
+  // Apply filters and pagination whenever writeups or filters change
+  useEffect(() => {
+    applyFiltersAndPagination();
+  }, [writeups, filters]);
+
+  // Reset subcategory filter when category changes
+  useEffect(() => {
+    if (filters.category === '') {
+      setFilters(prev => ({ ...prev, subcategory: '' }));
+    }
+  }, [filters.category]);
+
+  const applyFiltersAndPagination = () => {
+    let filtered = [...writeups];
+
+    // Apply search filter
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
+      filtered = filtered.filter(writeup =>
+        writeup.title.toLowerCase().includes(searchTerm) ||
+        writeup.description.toLowerCase().includes(searchTerm) ||
+        writeup.platform.toLowerCase().includes(searchTerm) ||
+        writeup.category?.name.toLowerCase().includes(searchTerm) ||
+        writeup.subcategory?.name.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // Apply category filter
+    if (filters.category) {
+      filtered = filtered.filter(writeup => 
+        writeup.category?._id === filters.category
+      );
+    }
+
+    // Apply subcategory filter
+    if (filters.subcategory) {
+      filtered = filtered.filter(writeup => 
+        writeup.subcategory?._id === filters.subcategory
+      );
+    }
+
+    // Apply difficulty filter
+    if (filters.difficulty) {
+      filtered = filtered.filter(writeup => 
+        writeup.difficulty === filters.difficulty
+      );
+    }
+
+    // Apply time range filter
+    if (filters.timeRange !== 'all') {
+      const now = new Date();
+      let startDate = new Date();
+      
+      switch (filters.timeRange) {
+        case 'today':
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case 'week':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          startDate.setMonth(now.getMonth() - 1);
+          break;
+        case 'year':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        default:
+          break;
+      }
+      
+      filtered = filtered.filter(writeup => 
+        new Date(writeup.createdAt) >= startDate
+      );
+    }
+
+    // Apply status filter
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(writeup => {
+        if (filters.status === 'published') return writeup.isPublished;
+        if (filters.status === 'draft') return !writeup.isPublished;
+        return true;
+      });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'newest':
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        case 'oldest':
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        case 'mostReads':
+          return (b.reads || 0) - (a.reads || 0);
+        case 'leastReads':
+          return (a.reads || 0) - (b.reads || 0);
+        case 'title':
+          return a.title.localeCompare(b.title);
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredWriteups(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  };
+
+  const handleFilterChange = (filterName, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterName]: value
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      category: '',
+      subcategory: '',
+      difficulty: '',
+      timeRange: 'all',
+      status: 'all',
+      sortBy: 'newest'
+    });
+  };
+
+  // Get current writeups for pagination
+  const indexOfLastWriteup = currentPage * writeupsPerPage;
+  const indexOfFirstWriteup = indexOfLastWriteup - writeupsPerPage;
+  const currentWriteups = filteredWriteups.slice(indexOfFirstWriteup, indexOfLastWriteup);
+  const totalPages = Math.ceil(filteredWriteups.length / writeupsPerPage);
+
+  const paginate = (pageNumber) => {
+    setCurrentPage(pageNumber);
   };
 
   if (loading) {
@@ -1027,32 +1218,6 @@ const WriteupsPage = () => {
           </div>
         </div>
 
-        {/* Top Authors */}
-        <div className="bg-gray-800 rounded-xl p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Top Authors</h3>
-            <span className="text-sm text-gray-400">By writeup count</span>
-          </div>
-          <div className="space-y-4">
-            {stats.topAuthors.map((author, index) => (
-              <div key={author.name} className="bg-gray-700 rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <span className="text-lg font-bold text-purple-400 mr-3">#{index + 1}</span>
-                    <div>
-                      <p className="text-white font-medium">{author.name}</p>
-                      <p className="text-sm text-gray-400">{author.reads} total reads</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-white font-bold">{author.count} writeups</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Recent Activity */}
         <div className="bg-gray-800 rounded-xl p-6 shadow-lg">
           <div className="flex items-center justify-between mb-4">
@@ -1092,6 +1257,137 @@ const WriteupsPage = () => {
             </Link>
           </div>
         </div>
+
+        {/* Filters Section */}
+        <div className="p-6 border-b border-gray-700 bg-gray-750">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            {/* Search */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Search</label>
+              <input
+                type="text"
+                placeholder="Search writeups..."
+                value={filters.search}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Category Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
+              <select
+                value={filters.category}
+                onChange={(e) => handleFilterChange('category', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Categories</option>
+                {categories.map((category) => (
+                  <option key={category._id} value={category._id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Subcategory Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Subcategory</label>
+              <select
+                value={filters.subcategory}
+                onChange={(e) => handleFilterChange('subcategory', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Subcategories</option>
+                {subcategories
+                  .filter(sub => !filters.category || sub.category === filters.category)
+                  .map((subcategory) => (
+                    <option key={subcategory._id} value={subcategory._id}>
+                      {subcategory.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Difficulty Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Difficulty</label>
+              <select
+                value={filters.difficulty}
+                onChange={(e) => handleFilterChange('difficulty', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Difficulties</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {/* Time Range Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Time Range</label>
+              <select
+                value={filters.timeRange}
+                onChange={(e) => handleFilterChange('timeRange', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">Last 7 Days</option>
+                <option value="month">Last 30 Days</option>
+                <option value="year">Last Year</option>
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+              <select
+                value={filters.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
+
+            {/* Sort By */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Sort By</label>
+              <select
+                value={filters.sortBy}
+                onChange={(e) => handleFilterChange('sortBy', e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="mostReads">Most Reads</option>
+                <option value="leastReads">Least Reads</option>
+                <option value="title">Title A-Z</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Filter Summary and Clear Button */}
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-400">
+              Showing {filteredWriteups.length} of {writeups.length} writeups
+              {filters.search && ` matching "${filters.search}"`}
+            </div>
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-700">
             <thead className="bg-gray-700">
@@ -1107,9 +1403,6 @@ const WriteupsPage = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                   Category
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Author
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                   Today's Reads
@@ -1129,108 +1422,175 @@ const WriteupsPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {writeups.map((writeup) => (
-                <tr key={writeup._id} className="hover:bg-gray-700/50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-white">{writeup.title}</div>
-                    {writeup.bounty?.amount > 0 && (
-                      <div className="text-xs text-green-400 mt-1">
-                        Bounty: {writeup.bounty.amount} {writeup.bounty.currency}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-300">{writeup.platform}</div>
-                    {writeup.platformUrl && (
-                      <a 
-                        href={writeup.platformUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
-                      >
-                        View on Platform →
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      writeup.difficulty === 'Easy' 
-                        ? 'bg-green-100 text-green-800'
-                        : writeup.difficulty === 'Medium'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {writeup.difficulty}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-300">{writeup.category?.name || 'N/A'}</div>
-                    {writeup.subcategory && (
-                      <div className="text-xs text-gray-400 mt-1">{writeup.subcategory.name}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-8 w-8">
-                        <div className="h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                          <span className="text-blue-400 text-sm font-medium">
-                            {writeup.author?.username?.charAt(0).toUpperCase() || '?'}
-                          </span>
+              {currentWriteups.length > 0 ? (
+                currentWriteups.map((writeup) => (
+                  <tr key={writeup._id} className="hover:bg-gray-700/50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-white">{writeup.title}</div>
+                      {writeup.bounty?.amount > 0 && (
+                        <div className="text-xs text-green-400 mt-1">
+                          Bounty: {writeup.bounty.amount} {writeup.bounty.currency}
                         </div>
-                      </div>
-                      <div className="ml-3">
-                        <div className="text-sm text-white">{writeup.author?.username || 'Unknown'}</div>
-                        <div className="text-xs text-gray-400">{writeup.author?.email || ''}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-300">{writeup.todayReads || 0}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-300">{writeup.reads || 0}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                    {new Date(writeup.updatedAt).toLocaleDateString()}
-                    <div className="text-xs text-gray-400 mt-1">
-                      {new Date(writeup.updatedAt).toLocaleTimeString()}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      writeup.isPublished 
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {writeup.isPublished ? 'Published' : 'Draft'}
-                    </span>
-                    {writeup.isFeatured && (
-                      <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                        Featured
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-300">{writeup.platform}</div>
+                      {writeup.platformUrl && (
+                        <a 
+                          href={writeup.platformUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
+                        >
+                          View on Platform →
+                        </a>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        writeup.difficulty === 'Easy' 
+                          ? 'bg-green-100 text-green-800'
+                          : writeup.difficulty === 'Medium'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {writeup.difficulty}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <Link
-                        to={`/admin/writeups/edit/${writeup._id}`}
-                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                      >
-                        Edit
-                      </Link>
-                      <button
-                        onClick={() => handleDeleteWriteup(writeup._id)}
-                        className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                      >
-                        Delete
-                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-300">{writeup.category?.name || 'N/A'}</div>
+                      {writeup.subcategory && (
+                        <div className="text-xs text-gray-400 mt-1">{writeup.subcategory.name}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-300">{writeup.todayReads || 0}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-300">{writeup.reads || 0}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      {new Date(writeup.updatedAt).toLocaleDateString()}
+                      <div className="text-xs text-gray-400 mt-1">
+                        {new Date(writeup.updatedAt).toLocaleTimeString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        writeup.isPublished 
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {writeup.isPublished ? 'Published' : 'Draft'}
+                      </span>
+                      {writeup.isFeatured && (
+                        <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                          Featured
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <Link
+                          to={`/admin/writeups/edit/${writeup._id}`}
+                          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() => handleTogglePublish(writeup._id, writeup.isPublished)}
+                          className={`px-3 py-1 rounded transition-colors ${
+                            writeup.isPublished
+                              ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                              : 'bg-green-500 text-white hover:bg-green-600'
+                          }`}
+                        >
+                          {writeup.isPublished ? 'Unpublish' : 'Publish'}
+                        </button>
+                        <button
+                          onClick={() => setDeleteModal({ show: true, writeupId: writeup._id, writeupTitle: writeup.title })}
+                          className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="9" className="px-6 py-8 text-center">
+                    <div className="text-gray-400">
+                      <svg className="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p className="text-lg font-medium">No writeups found</p>
+                      <p className="text-sm">Try adjusting your filters or search terms</p>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-700 bg-gray-750">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-400">
+                Showing {indexOfFirstWriteup + 1} to {Math.min(indexOfLastWriteup, filteredWriteups.length)} of {filteredWriteups.length} results
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber;
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i;
+                    } else {
+                      pageNumber = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNumber}
+                        onClick={() => paginate(pageNumber)}
+                        className={`px-3 py-2 rounded-lg transition-colors ${
+                          currentPage === pageNumber
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-700 text-white hover:bg-gray-600'
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Writeup Details Modal */}
@@ -1267,10 +1627,6 @@ const WriteupsPage = () => {
                     <div>
                       <p className="text-sm text-gray-400">Subcategory</p>
                       <p className="text-white">{selectedWriteup.subcategory?.name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Author</p>
-                      <p className="text-white">{selectedWriteup.author?.username || 'Unknown'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-400">Status</p>
@@ -1332,6 +1688,17 @@ const WriteupsPage = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.show}
+        onClose={() => setDeleteModal({ show: false, writeupId: null, writeupTitle: '' })}
+        onConfirm={() => handleDeleteWriteup(deleteModal.writeupId)}
+        title="Delete Writeup"
+        message="Are you sure you want to delete this writeup? This action cannot be undone."
+        itemName={deleteModal.writeupTitle}
+        type="danger"
+      />
     </div>
   );
 };

@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
+
+// Predefined tags for different categories
+const PREDEFINED_TAGS = {
+  'Web Application': ['XSS', 'SQL Injection', 'CSRF', 'File Upload', 'Authentication', 'Authorization', 'Business Logic', 'IDOR', 'SSRF', 'Open Redirect'],
+  'Mobile Application': ['Android', 'iOS', 'Deep Link', 'Intent', 'WebView', 'Certificate Pinning', 'Code Injection', 'Data Storage'],
+  'API Security': ['JWT', 'OAuth', 'Rate Limiting', 'Input Validation', 'Mass Assignment', 'GraphQL', 'REST', 'SOAP'],
+  'Network Security': ['Port Scanning', 'DNS', 'Subdomain Enumeration', 'Network Enumeration', 'Wireless', 'Bluetooth'],
+  'Cloud Security': ['AWS', 'Azure', 'GCP', 'S3', 'IAM', 'Lambda', 'Container', 'Kubernetes', 'Docker'],
+  'General': ['Reconnaissance', 'Information Disclosure', 'Privilege Escalation', 'Remote Code Execution', 'Local File Inclusion', 'Directory Traversal']
+};
 
 const WriteupForm = ({ writeup, onSubmit }) => {
   const { user } = useAuth();
@@ -14,12 +24,12 @@ const WriteupForm = ({ writeup, onSubmit }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [tagInput, setTagInput] = useState('');
+  const [suggestedTags, setSuggestedTags] = useState([]);
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    author: '',
     category: '',
     subcategory: '',
     difficulty: 'easy',
@@ -40,13 +50,12 @@ const WriteupForm = ({ writeup, onSubmit }) => {
       setFormData({
         title: writeup.title || '',
         description: writeup.description || '',
-        author: writeup.author || '',
-        category: writeup.category?._id || '',
-        subcategory: writeup.subcategory?._id || '',
-        difficulty: writeup.difficulty || 'easy',
+        category: writeup.category?._id || writeup.category || '',
+        subcategory: writeup.subcategory?._id || writeup.subcategory || '',
+        difficulty: (writeup.difficulty || 'easy').toLowerCase(),
         platform: writeup.platform || '',
         platformUrl: writeup.platformUrl || '',
-        bounty: writeup.bounty || '',
+        bounty: writeup.bounty?.amount?.toString() || writeup.bounty?.description || '',
         tags: writeup.tags || []
       });
     }
@@ -56,8 +65,16 @@ const WriteupForm = ({ writeup, onSubmit }) => {
     if (formData.category) {
       const category = categories.find(cat => cat._id === formData.category);
       setSelectedCategory(category);
+      
+      // Update suggested tags based on selected category
+      if (category && PREDEFINED_TAGS[category.name]) {
+        setSuggestedTags(PREDEFINED_TAGS[category.name]);
+      } else {
+        setSuggestedTags(PREDEFINED_TAGS['General']);
+      }
     } else {
       setSelectedCategory(null);
+      setSuggestedTags(PREDEFINED_TAGS['General']);
     }
   }, [formData.category, categories]);
 
@@ -75,7 +92,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error('Please log in to access categories');
-        navigate('/login');
+        navigate('/admin/login');
         return;
       }
       const categoriesRes = await axios.get(`${API_BASE_URL}/api/admin/categories`, {
@@ -154,6 +171,15 @@ const WriteupForm = ({ writeup, onSubmit }) => {
     }
   };
 
+  const addSuggestedTag = (tag) => {
+    if (!formData.tags.includes(tag)) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...prev.tags, tag]
+      }));
+    }
+  };
+
   const removeTag = (tagToRemove) => {
     setFormData(prev => ({
       ...prev,
@@ -168,14 +194,32 @@ const WriteupForm = ({ writeup, onSubmit }) => {
       const token = localStorage.getItem('token');
       if (!token) {
         toast.error('Please log in to submit a writeup');
-        navigate('/login');
+        navigate('/admin/login');
         return;
       }
 
     
       // Validate required fields
-      if (!formData.category || !formData.subcategory || !formData.author) {
-        toast.error('Please fill in all required fields including author');
+      if (!formData.title || !formData.title.trim()) {
+        toast.error('Please enter a title');
+        setSubmitting(false);
+        return;
+      }
+
+      if (!formData.description || !formData.description.trim()) {
+        toast.error('Please enter a description');
+        setSubmitting(false);
+        return;
+      }
+
+      if (!formData.platform || !formData.platform.trim()) {
+        toast.error('Please enter a platform');
+        setSubmitting(false);
+        return;
+      }
+
+      if (!formData.category || !formData.subcategory) {
+        toast.error('Please select a category and subcategory');
         setSubmitting(false);
         return;
       }
@@ -194,20 +238,31 @@ const WriteupForm = ({ writeup, onSubmit }) => {
       const submitData = {
         title: formData.title,
         description: formData.description,
-        content: formData.description, // Using description as content for now
-        author: formData.author.trim(), // Include author field
-        categoryId: selectedCategory._id,
-        subcategoryId: selectedSubcategory._id,
-        difficulty: 'Easy',
+        category: selectedCategory._id,
+        subcategory: selectedSubcategory._id,
+        difficulty: formData.difficulty.charAt(0).toUpperCase() + formData.difficulty.slice(1),
         platform: formData.platform || '',
         platformUrl: formData.platformUrl || '',
-        bounty: formData.bounty || '',
+        bounty: {
+          amount: parseFloat(formData.bounty) || 0,
+          currency: 'USD',
+          description: formData.bounty || ''
+        },
         tags: formData.tags || []
       };
 
-    
+      console.log('Form data before submission:', formData);
+      console.log('Submit data:', submitData);
+
+      // If onSubmit prop is provided (edit mode), use it
+      if (onSubmit) {
+        await onSubmit(submitData);
+        return;
+      }
+
+      // Otherwise, create new writeup (create mode)
       const response = await axios.post(
-        `${API_BASE_URL}/api/writeups`,
+        `${API_BASE_URL}/api/admin/writeups`,
         submitData,
         {
           headers: { 
@@ -318,11 +373,11 @@ const WriteupForm = ({ writeup, onSubmit }) => {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6"
+            className="group"
           >
             <div className="group">
               <label htmlFor="title" className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors">
-                Title
+                Title <span className="text-red-400">*</span>
               </label>
               <div className="relative mt-1">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg blur"></div>
@@ -331,23 +386,6 @@ const WriteupForm = ({ writeup, onSubmit }) => {
                   id="title"
                   name="title"
                   value={formData.title}
-                  onChange={handleChange}
-                  required
-                  className="relative block w-full rounded-lg bg-gray-700/50 text-white border border-gray-600 focus:border-blue-500 focus:ring-blue-500 focus:outline-none px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base transition-all duration-200 hover:bg-gray-600/50 backdrop-blur-sm"
-                />
-              </div>
-            </div>
-            <div className="group">
-              <label htmlFor="author" className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors">
-                Author
-              </label>
-              <div className="relative mt-1">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg blur"></div>
-                <input
-                  type="text"
-                  id="author"
-                  name="author"
-                  value={formData.author}
                   onChange={handleChange}
                   required
                   className="relative block w-full rounded-lg bg-gray-700/50 text-white border border-gray-600 focus:border-blue-500 focus:ring-blue-500 focus:outline-none px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base transition-all duration-200 hover:bg-gray-600/50 backdrop-blur-sm"
@@ -363,7 +401,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
             className="group"
           >
             <label htmlFor="description" className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors">
-              Description
+              Description <span className="text-red-400">*</span>
             </label>
             <div className="relative mt-1">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 rounded-lg blur"></div>
@@ -388,7 +426,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
           >
             <div>
               <label className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors mb-3 sm:mb-4">
-                Select Category
+                Select Category <span className="text-red-400">*</span>
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {categories.map(category => (
@@ -454,7 +492,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
               >
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
                   <label className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors">
-                    Select Subcategory
+                    Select Subcategory <span className="text-red-400">*</span>
                   </label>
                   {isSubcategoryLoading && (
                     <div className="flex items-center space-x-2">
@@ -550,7 +588,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
             </div>
             <div className="group">
               <label htmlFor="platform" className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors">
-                Platform
+                Platform <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
@@ -604,19 +642,67 @@ const WriteupForm = ({ writeup, onSubmit }) => {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.7 }}
-            className="group"
+            className="space-y-4"
           >
-            <label htmlFor="tags" className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors">
-              Tags
+            <div>
+              <label className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors mb-3">
+                Suggested Tags
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                {suggestedTags.map(tag => (
+                  <motion.div
+                    key={tag}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    whileHover={{ scale: 1.02, y: -1 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => addSuggestedTag(tag)}
+                    className={`relative cursor-pointer rounded-lg p-2 sm:p-3 transition-all duration-200 ${
+                      formData.tags.includes(tag)
+                        ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-2 border-green-500/50 shadow-lg shadow-green-500/20'
+                        : 'bg-gray-800/50 border border-gray-700/50 hover:border-green-500/30 hover:shadow-lg hover:shadow-green-500/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs sm:text-sm font-medium ${
+                        formData.tags.includes(tag)
+                          ? 'text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400'
+                          : 'text-gray-300'
+                      }`}>
+                        {tag}
+                      </span>
+                      {formData.tags.includes(tag) && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="ml-2"
+                        >
+                          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-green-500/20">
+                            <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="customTags" className="block text-sm font-medium text-gray-300 group-hover:text-blue-400 transition-colors">
+                Add Custom Tags
             </label>
             <div className="mt-1 relative group">
               <div className="relative">
                 <input
                   type="text"
+                    id="customTags"
                   value={tagInput}
                   onChange={handleTagInputChange}
                   onKeyDown={handleTagInputKeyDown}
-                  placeholder="Type and press Enter to add tags"
+                    placeholder="Type and press Enter to add custom tags"
                   className="block w-full rounded-lg bg-gray-700/50 text-white border border-gray-600 focus:border-blue-500 focus:ring-blue-500 focus:outline-none px-4 py-2 pr-8 placeholder-gray-400 transition-all duration-200 hover:bg-gray-600"
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-gray-400">
@@ -625,9 +711,18 @@ const WriteupForm = ({ writeup, onSubmit }) => {
                   </svg>
                 </div>
               </div>
+              </div>
+            </div>
+
+            {/* Selected Tags Display */}
+            {formData.tags.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Selected Tags ({formData.tags.length})
+                </label>
               <motion.div
                 layout
-                className="mt-3 flex flex-wrap gap-2"
+                  className="flex flex-wrap gap-2"
               >
                 {formData.tags.map(tag => (
                   <motion.span
@@ -650,6 +745,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
                 ))}
               </motion.div>
             </div>
+            )}
           </motion.div>
 
           {/* Submit Button */}

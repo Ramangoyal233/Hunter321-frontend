@@ -5,7 +5,9 @@ import PDFReader from './PDFReader';
 import { useNavigate } from 'react-router-dom';
 import { FaSearch, FaTimes, FaArrowLeft, FaArrowRight, FaSearchPlus, FaSearchMinus, FaExpand, FaCompress } from 'react-icons/fa';
 
-// Helper function for formatting reading time
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+
+// Helper for formatting duration
 export const formatReadingTime = (seconds) => {
   if (!seconds || seconds === 0) return '0s';
   const hours = Math.floor(seconds / 3600);
@@ -18,7 +20,16 @@ export const formatReadingTime = (seconds) => {
   return result.trim();
 };
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+// Helper function to get full URL for images
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL, return as is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // Otherwise, prepend the API base URL
+  return `${API_BASE_URL}${imagePath}`;
+};
 
 const BookCard = ({ book, onSelect, onProgressUpdate }) => {
   const [readingProgress, setReadingProgress] = useState(null);
@@ -89,7 +100,7 @@ const BookCard = ({ book, onSelect, onProgressUpdate }) => {
       <div className="relative w-full h-40 sm:h-48 bg-zinc-800 flex items-center justify-center border-b border-zinc-800">
         {book.coverImageUrl ? (
           <img
-            src={book.coverImageUrl}
+            src={getImageUrl(book.coverImageUrl)}
             alt={book.title}
             className="w-full h-full object-cover object-center"
           />
@@ -187,7 +198,7 @@ const BooksPage = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
-      navigate('/login');
+      navigate('/signin');
       return;
     }
 
@@ -205,7 +216,7 @@ const BooksPage = () => {
       } catch (error) {
         console.error('Error fetching books:', error);
         if (error.response?.status === 401) {
-          navigate('/login');
+          navigate('/signin');
         } else {
           setError('Error fetching books. Please try again.');
         }
@@ -578,7 +589,7 @@ const BooksPage = () => {
               </button>
               <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-6 mb-4">
                 <img
-                  src={selectedBook.coverImageUrl}
+                  src={getImageUrl(selectedBook.coverImageUrl)}
                   alt={selectedBook.title}
                   className="w-32 h-44 sm:w-40 sm:h-56 object-cover rounded-md shadow-md flex-shrink-0 mx-auto lg:mx-0"
                 />

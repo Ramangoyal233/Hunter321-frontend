@@ -123,7 +123,8 @@ const SignIn = () => {
       const result = await login(formData.email.trim(), formData.password);
       
       if (result.token && result.user) {
-        
+        // Redirect to homepage after successful login
+        navigate('/');
       } else {
         setError('Login failed');
       }

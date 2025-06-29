@@ -20,7 +20,8 @@ const SettingsPage = () => {
     maintenanceMode: false,
     defaultUserRole: 'user',
     allowedFileTypes: ['image/jpeg', 'image/png', 'image/gif'],
-    maxFileSize: 5, // in MB
+    maxFileSize: 50, // in MB (for PDFs)
+    maxImageSize: 2, // in MB (for images)
     emailNotifications: {
       newUser: true,
       newWriteup: true,

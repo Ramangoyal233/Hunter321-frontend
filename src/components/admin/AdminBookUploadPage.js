@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50MB for PDFs
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB for images
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
 const ALLOWED_PDF_TYPE = 'application/pdf';
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
@@ -44,8 +45,8 @@ const AdminBookUploadPage = () => {
         return;
       }
 
-      if (file.size > MAX_FILE_SIZE) {
-        reject(new Error('Image file size should be less than 5MB'));
+      if (file.size > MAX_IMAGE_SIZE) {
+        reject(new Error('Image file size should be less than 2MB'));
         return;
       }
 
@@ -66,8 +67,8 @@ const AdminBookUploadPage = () => {
     if (file.type !== ALLOWED_PDF_TYPE) {
       throw new Error('Please upload a PDF file');
     }
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error('PDF file size should be less than 5MB');
+    if (file.size > MAX_PDF_SIZE) {
+      throw new Error('PDF file size should be less than 50MB');
     }
     return true;
   };
@@ -300,7 +301,7 @@ const AdminBookUploadPage = () => {
             <label htmlFor="coverImage" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Cover Image (JPG/PNG only)
               <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
-                Max size: 5MB
+                Max size: 2MB
               </span>
             </label>
             <div className="mt-1 flex items-center space-x-4">
@@ -340,7 +341,7 @@ const AdminBookUploadPage = () => {
             <label htmlFor="pdf" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Book PDF
               <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
-                Max size: 5MB
+                Max size: 50MB
               </span>
             </label>
             <div className="mt-1 flex items-center space-x-4">

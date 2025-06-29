@@ -148,8 +148,6 @@ const Categories = () => {
                             {writeup.description}
                           </p>
                           <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
-                            <span>By {writeup.author.username}</span>
-                            <span>•</span>
                             <span>
                               {new Date(writeup.createdAt).toLocaleDateString()}
                             </span>

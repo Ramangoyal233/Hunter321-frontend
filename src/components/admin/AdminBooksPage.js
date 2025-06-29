@@ -3,6 +3,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
@@ -26,6 +27,13 @@ const AdminBooksPage = () => {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [bookStatsMap, setBookStatsMap] = useState({});
+
+  // State for delete confirmation modal
+  const [deleteModal, setDeleteModal] = useState({ 
+    show: false, 
+    bookId: null, 
+    bookTitle: '' 
+  });
 
   useEffect(() => {
     const fetchBooks = async () => {
@@ -56,7 +64,6 @@ const AdminBooksPage = () => {
   }, [navigate]);
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this book?')) {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -70,6 +77,9 @@ const AdminBooksPage = () => {
         setMessage('Book deleted successfully!');
         setBooks(books.filter(book => book._id !== id));
         setTimeout(() => setMessage(null), 3000);
+      
+      // Close the modal
+      setDeleteModal({ show: false, bookId: null, bookTitle: '' });
       } catch (err) {
         console.error('Error deleting book:', err);
         setError('Failed to delete book. Please try again.');
@@ -78,7 +88,10 @@ const AdminBooksPage = () => {
           navigate('/admin/login');
         }
       }
-    }
+  };
+
+  const handleDeleteClick = (book) => {
+    setDeleteModal({ show: true, bookId: book._id, bookTitle: book.title });
   };
 
   const handleToggleStatus = async (book) => {
@@ -188,7 +201,7 @@ const AdminBooksPage = () => {
                           Edit
                         </button>
                         <button 
-                          onClick={() => handleDelete(book._id)}
+                          onClick={() => handleDeleteClick(book)}
                           className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 mr-4"
                         >
                           Delete
@@ -202,6 +215,17 @@ const AdminBooksPage = () => {
           </table>
         </div>
       </motion.div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.show}
+        onClose={() => setDeleteModal({ show: false, bookId: null, bookTitle: '' })}
+        onConfirm={() => handleDelete(deleteModal.bookId)}
+        title="Delete Book"
+        message="Are you sure you want to delete this book? This action cannot be undone."
+        itemName={deleteModal.bookTitle}
+        type="danger"
+      />
     </div>
   );
 };

@@ -24,10 +24,13 @@ const Profile = () => {
       website: ''
     },
     skills: [],
-    location: {
-      country: '',
-      city: ''
-    }
+    location: { country: '', city: '' },
+    firstName: '',
+    lastName: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: '',
+    address: { street: '', city: '', state: '', zip: '', country: '' }
   });
   const [newSkill, setNewSkill] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -51,7 +54,17 @@ const Profile = () => {
         setFormData(prev => ({
           ...prev,
           username: response.data.username,
-          email: response.data.email
+          email: response.data.email,
+          firstName: response.data.firstName,
+          lastName: response.data.lastName,
+          phone: response.data.phone,
+          dateOfBirth: response.data.dateOfBirth,
+          gender: response.data.gender,
+          address: response.data.address || { street: '', city: '', state: '', zip: '', country: '' },
+          bio: response.data.profile?.bio,
+          socialLinks: response.data.profile?.socialLinks,
+          skills: response.data.profile?.skills,
+          location: response.data.location || { country: '', city: '' }
         }));
         if (response.data.profile?.avatar) {
           setProfileImage(response.data.profile.avatar);
@@ -117,10 +130,13 @@ const Profile = () => {
       const response = await axios.put(`${API_BASE_URL}/api/auth/update-profile`, {
         username: formData.username,
         email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        address: { city: formData.address.city, country: formData.address.country },
         bio: formData.bio,
         socialLinks: formData.socialLinks,
-        skills: formData.skills,
-        location: formData.location
+        skills: formData.skills
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -375,8 +391,8 @@ const Profile = () => {
                     </label>
                     <input
                       type="text"
-                      name="location.city"
-                      value={formData.location.city}
+                      name="address.city"
+                      value={formData.address.city}
                       onChange={handleInputChange}
                       disabled={!isEditing}
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-2 text-white disabled:opacity-50"
@@ -388,8 +404,8 @@ const Profile = () => {
                     </label>
                     <input
                       type="text"
-                      name="location.country"
-                      value={formData.location.country}
+                      name="address.country"
+                      value={formData.address.country}
                       onChange={handleInputChange}
                       disabled={!isEditing}
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-2 text-white disabled:opacity-50"

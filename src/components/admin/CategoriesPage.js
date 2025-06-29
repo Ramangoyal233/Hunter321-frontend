@@ -19,6 +19,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-toastify';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 const COLORS = {
   primary: '#3B82F6',
@@ -32,11 +33,11 @@ const COLORS = {
 };
 
 const CategoriesPage = () => {
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin, logout, loading } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingSubcategory, setEditingSubcategory] = useState(null);
@@ -71,6 +72,18 @@ const CategoriesPage = () => {
     writeupsBySubcategory: {}
   });
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
+  const [parentCategoryId, setParentCategoryId] = useState(null);
+  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [showAddSubcategoryForm, setShowAddSubcategoryForm] = useState(false);
+
+  // State for delete confirmation modal
+  const [deleteModal, setDeleteModal] = useState({ 
+    show: false, 
+    id: null, 
+    type: '', 
+    name: '' 
+  });
+
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
   useEffect(() => {
@@ -84,7 +97,7 @@ const CategoriesPage = () => {
 
   const fetchCategories = async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       setError(null);
       const token = localStorage.getItem('token');
       if (!token) {
@@ -159,7 +172,7 @@ const CategoriesPage = () => {
         toast.error(errorMessage);
       }
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -438,31 +451,37 @@ const CategoriesPage = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return;
-    
     try {
       await axios.delete(`${API_BASE_URL}/api/admin/categories/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       toast.success('Category deleted successfully');
       fetchCategories();
+      
+      // Close the modal
+      setDeleteModal({ show: false, id: null, type: '', name: '' });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete category');
     }
   };
 
   const handleDeleteSubcategory = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this subcategory?')) return;
-    
     try {
       await axios.delete(`${API_BASE_URL}/api/admin/subcategories/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       toast.success('Subcategory deleted successfully');
       fetchCategories();
+      
+      // Close the modal
+      setDeleteModal({ show: false, id: null, type: '', name: '' });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete subcategory');
     }
+  };
+
+  const handleDeleteClick = (id, type, name) => {
+    setDeleteModal({ show: true, id, type, name });
   };
 
   const handleOpenSubcategoryModal = (categoryId) => {
@@ -847,7 +866,7 @@ const CategoriesPage = () => {
                           </svg>
                         </Link>
                         <button
-                          onClick={() => handleDelete(category._id)}
+                          onClick={() => handleDeleteClick(category._id, 'category', category.name)}
                           className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors duration-300"
                           title="Delete Category"
                         >
@@ -1031,7 +1050,7 @@ const CategoriesPage = () => {
                           </svg>
                         </button>
                         <button
-                          onClick={() => handleDeleteSubcategory(subcategory._id)}
+                          onClick={() => handleDeleteClick(subcategory._id, 'subcategory', subcategory.name)}
                           className="text-red-400 hover:text-red-300"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1047,6 +1066,23 @@ const CategoriesPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.show}
+        onClose={() => setDeleteModal({ show: false, id: null, type: '', name: '' })}
+        onConfirm={() => {
+          if (deleteModal.type === 'category') {
+            handleDelete(deleteModal.id);
+          } else if (deleteModal.type === 'subcategory') {
+            handleDeleteSubcategory(deleteModal.id);
+          }
+        }}
+        title={`Delete ${deleteModal.type.charAt(0).toUpperCase() + deleteModal.type.slice(1)}`}
+        message={`Are you sure you want to delete this ${deleteModal.type}? This action cannot be undone.`}
+        itemName={deleteModal.name}
+        type="danger"
+      />
     </div>
   );
 };

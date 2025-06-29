@@ -15,6 +15,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import axios from 'axios';
 import { fetchCategories, fetchWriteups, deleteCategory, deleteWriteup, fetchSubcategories, createSubcategory, fetchCategory, updateSubcategory, deleteSubcategory } from '../../api/adminApi';
 import { toast } from 'react-hot-toast';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 // Register ChartJS components
 ChartJS.register(
@@ -43,6 +44,14 @@ const AdminDashboard = () => {
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
   const [showAddSubcategoryForm, setShowAddSubcategoryForm] = useState(false);
   const [editingSubcategory, setEditingSubcategory] = useState(null);
+
+  // State for delete confirmation modal
+  const [deleteModal, setDeleteModal] = useState({ 
+    show: false, 
+    id: null, 
+    type: '', 
+    name: '' 
+  });
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
@@ -134,7 +143,7 @@ const AdminDashboard = () => {
       
           setCategories(categoriesWithSubcategories);
           setSubcategories(subcategoriesRes.data.subcategories);
-          
+        
           // Prepare chart data for categories
           const last6Months = Array.from({ length: 6 }, (_, i) => {
             const date = new Date();
@@ -392,15 +401,17 @@ const AdminDashboard = () => {
       description: subcategory.description,
       icon: subcategory.icon
     });
-    setParentCategoryId(subcategory.parent._id);
+    
+    // Get the category ID - handle both object and string references
+    const categoryId = subcategory.category?._id || subcategory.category;
+    setParentCategoryId(categoryId);
+    
+    // Show the modal and the form
     setIsSubcategoryModalOpen(true);
+    setShowAddSubcategoryForm(true);
   };
 
   const handleDelete = async (id, type) => {
-    if (!window.confirm(`Are you sure you want to delete this ${type}?`)) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -415,6 +426,12 @@ const AdminDashboard = () => {
         });
         setCategories(categories.filter(cat => cat._id !== id));
         toast.success('Category deleted successfully');
+      } else if (type === 'writeup') {
+        await axios.delete(`${API_BASE_URL}/api/admin/writeups/` + id, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setWriteups(writeups.filter(writeup => writeup._id !== id));
+        toast.success('Writeup deleted successfully');
       } else {
         await axios.delete(`${API_BASE_URL}/api/admin/subcategories/` + id, {
           headers: { Authorization: `Bearer ${token}` }
@@ -431,6 +448,9 @@ const AdminDashboard = () => {
         
         toast.success('Subcategory deleted successfully');
       }
+
+      // Close the modal
+      setDeleteModal({ show: false, id: null, type: '', name: '' });
     } catch (error) {
       if (error.response?.status === 401) {
         logout();
@@ -441,13 +461,17 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleDeleteClick = (id, type, name) => {
+    setDeleteModal({ show: true, id, type, name });
+  };
+
   const handleAddSubcategory = async () => {
     try {
       const subcategoryData = {
-        name: newSubcategoryName,
-        description: `Subcategory of ${categories.find(cat => cat._id === parentCategoryId)?.name || 'Category'}`,
-        icon: '🔒',
-        slug: newSubcategoryName
+        name: subcategoryFormData.name,
+        description: subcategoryFormData.description || `Subcategory of ${categories.find(cat => cat._id === parentCategoryId)?.name || 'Category'}`,
+        icon: subcategoryFormData.icon || '🔒',
+        slug: subcategoryFormData.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)/g, '')
@@ -455,11 +479,24 @@ const AdminDashboard = () => {
       
       const newSubcategory = await createSubcategory(parentCategoryId, subcategoryData);
       setSubcategories([...subcategories, newSubcategory]);
+      
+      // Add the new subcategory to the appropriate category
+      setCategories(categories.map(category => {
+        if (category._id === parentCategoryId) {
+          return {
+            ...category,
+            subcategories: [...(category.subcategories || []), newSubcategory]
+          };
+        }
+        return category;
+      }));
+      
       setShowAddSubcategoryForm(false);
-      setNewSubcategoryName('');
+      setSubcategoryFormData({ name: '', description: '', icon: '' });
+      toast.success('Subcategory created successfully');
     } catch (error) {
       console.error('Error adding subcategory:', error);
-      // TODO: Add error handling UI
+      toast.error(error.response?.data?.message || 'Error creating subcategory');
     }
   };
 
@@ -493,17 +530,16 @@ const AdminDashboard = () => {
   const handleUpdateSubcategory = async () => {
     try {
       const subcategoryData = {
-        name: newSubcategoryName,
-        description: editingSubcategory.description,
-        icon: editingSubcategory.icon,
-        slug: newSubcategoryName
+        name: subcategoryFormData.name,
+        description: subcategoryFormData.description,
+        icon: subcategoryFormData.icon,
+        slug: subcategoryFormData.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)/g, '')
       };
       
       const updatedSubcategory = await updateSubcategory(
-        parentCategoryId,
         editingSubcategory._id,
         subcategoryData
       );
@@ -512,12 +548,22 @@ const AdminDashboard = () => {
         subcat._id === updatedSubcategory._id ? updatedSubcategory : subcat
       ));
       
+      // Update the subcategories in the categories state
+      setCategories(categories.map(category => ({
+        ...category,
+        subcategories: category.subcategories.map(sub =>
+          sub._id === editingSubcategory._id ? updatedSubcategory : sub
+        )
+      })));
+      
       setShowAddSubcategoryForm(false);
       setNewSubcategoryName('');
       setEditingSubcategory(null);
+      setSubcategoryFormData({ name: '', description: '', icon: '' });
+      setIsSubcategoryModalOpen(false);
     } catch (error) {
       console.error('Error updating subcategory:', error);
-      // TODO: Add error handling UI
+      toast.error(error.response?.data?.message || 'Error updating subcategory');
     }
   };
 
@@ -787,7 +833,7 @@ const AdminDashboard = () => {
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleDelete(category._id, 'category')}
+                            onClick={() => handleDeleteClick(category._id, 'category', category.name)}
                             className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors duration-300"
                             title="Delete Category"
                           >
@@ -820,7 +866,7 @@ const AdminDashboard = () => {
                                     </svg>
                                   </button>
                                   <button
-                                    onClick={() => handleDelete(subcategory._id, 'subcategory')}
+                                    onClick={() => handleDeleteClick(subcategory._id, 'subcategory', subcategory.name)}
                                     className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors duration-300"
                                     title="Delete Subcategory"
                                   >
@@ -871,12 +917,6 @@ const AdminDashboard = () => {
                           <div className="flex items-center space-x-4 text-sm text-gray-500">
                             <span className="flex items-center">
                               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                              {writeup.author?.username || 'Unknown'}
-                            </span>
-                            <span className="flex items-center">
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                               {new Date(writeup.createdAt).toLocaleDateString()}
@@ -894,7 +934,7 @@ const AdminDashboard = () => {
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleDelete(writeup._id, 'writeup')}
+                            onClick={() => handleDeleteClick(writeup._id, 'writeup', writeup.title)}
                             className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors duration-300"
                             title="Delete Writeup"
                           >
@@ -920,7 +960,13 @@ const AdminDashboard = () => {
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-white">Manage Subcategories</h3>
               <button
-                onClick={() => setIsSubcategoryModalOpen(false)}
+                onClick={() => {
+                  setIsSubcategoryModalOpen(false);
+                  setShowAddSubcategoryForm(false);
+                  setEditingSubcategory(null);
+                  setSubcategoryFormData({ name: '', description: '', icon: '' });
+                  setParentCategoryId(null);
+                }}
                 className="text-gray-400 hover:text-white transition-colors duration-300"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -937,25 +983,49 @@ const AdminDashboard = () => {
                   </label>
                   <input
                     type="text"
-                    value={newSubcategoryName}
-                    onChange={(e) => setNewSubcategoryName(e.target.value)}
+                    value={subcategoryFormData.name}
+                    onChange={(e) => setSubcategoryFormData({...subcategoryFormData, name: e.target.value})}
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter subcategory name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={subcategoryFormData.description}
+                    onChange={(e) => setSubcategoryFormData({...subcategoryFormData, description: e.target.value})}
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter subcategory description"
+                    rows="3"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Icon
+                  </label>
+                  <input
+                    type="text"
+                    value={subcategoryFormData.icon}
+                    onChange={(e) => setSubcategoryFormData({...subcategoryFormData, icon: e.target.value})}
+                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter icon (emoji or text)"
                   />
                 </div>
                 <div className="flex justify-end space-x-3">
                   <button
                     onClick={() => {
                       setShowAddSubcategoryForm(false);
-                      setNewSubcategoryName('');
                       setEditingSubcategory(null);
+                      setSubcategoryFormData({ name: '', description: '', icon: '' });
                     }}
                     className="px-4 py-2 text-gray-400 hover:text-white transition-colors duration-300"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={editingSubcategory ? handleUpdateSubcategory : handleAddSubcategory}
+                    onClick={editingSubcategory ? handleUpdateSubcategory : handleSubcategorySubmit}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-300"
                   >
                     {editingSubcategory ? 'Update' : 'Add'} Subcategory
@@ -965,7 +1035,11 @@ const AdminDashboard = () => {
             ) : (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  {subcategories.map((subcategory) => (
+                  {subcategories.filter(sub => {
+                    // Handle both string and object category references
+                    const subCategoryId = sub.category?._id || sub.category;
+                    return subCategoryId === parentCategoryId;
+                  }).map((subcategory) => (
                     <div
                       key={subcategory._id}
                       className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
@@ -982,7 +1056,7 @@ const AdminDashboard = () => {
                           </svg>
                         </button>
                         <button
-                          onClick={() => handleDelete(subcategory._id, 'subcategory')}
+                          onClick={() => handleDeleteClick(subcategory._id, 'subcategory', subcategory.name)}
                           className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors duration-300"
                           title="Delete Subcategory"
                         >
@@ -995,7 +1069,11 @@ const AdminDashboard = () => {
                   ))}
                 </div>
                 <button
-                  onClick={() => setShowAddSubcategoryForm(true)}
+                  onClick={() => {
+                    setShowAddSubcategoryForm(true);
+                    setEditingSubcategory(null);
+                    setSubcategoryFormData({ name: '', description: '', icon: '' });
+                  }}
                   className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-300 flex items-center justify-center space-x-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1008,6 +1086,17 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModal.show}
+        onClose={() => setDeleteModal({ show: false, id: null, type: '', name: '' })}
+        onConfirm={() => handleDelete(deleteModal.id, deleteModal.type)}
+        title={`Delete ${deleteModal.type.charAt(0).toUpperCase() + deleteModal.type.slice(1)}`}
+        message={`Are you sure you want to delete this ${deleteModal.type}? This action cannot be undone.`}
+        itemName={deleteModal.name}
+        type="danger"
+      />
     </div>
   );
 };

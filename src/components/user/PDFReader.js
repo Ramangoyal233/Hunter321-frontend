@@ -14,6 +14,17 @@ if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
+// Helper function to get full URL for images
+const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL, return as is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // Otherwise, prepend the API base URL
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose, onTotalPages, onProgressUpdate }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,6 +33,10 @@ const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose
   const [numPages, setNumPages] = useState(null);
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [pdfDocument, setPdfDocument] = useState(null); // State to store the PDF document
+  const [showBlankPageWarning, setShowBlankPageWarning] = useState(false); // State for blank page warning
+  const [isFirstPageBlank, setIsFirstPageBlank] = useState(false); // State to track if first page is blank
+  const [blankPages, setBlankPages] = useState({}); // State to track blank pages for all pages
+  const [currentBlankPage, setCurrentBlankPage] = useState(null); // State to track current blank page
   const canvasRef = useRef(null);
   const navigate = useNavigate();
   const viewerRef = useRef(null); // Ref for the viewer container to get its dimensions
@@ -528,6 +543,42 @@ const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose
         // Wait for the render to complete
         await renderTask.promise;
         
+        // Add a small delay to ensure the canvas is fully rendered
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Check if the current page is blank (for any page, not just first)
+        console.log(`🔍 Checking if page ${currentPage} is blank...`);
+        const blank = isPageBlank(canvas);
+        console.log(`✅ Page ${currentPage} blank check result:`, blank);
+        
+        // Update blank pages state
+        setBlankPages(prev => ({
+          ...prev,
+          [currentPage]: blank
+        }));
+        
+        // Show warning if current page is blank
+        if (blank) {
+          console.log(`⚠️ Page ${currentPage} is blank, showing warning`);
+          setCurrentBlankPage(currentPage);
+          setShowBlankPageWarning(true);
+          // Auto-hide warning after 10 seconds
+          setTimeout(() => {
+            console.log('🕐 Auto-hiding blank page warning');
+            setShowBlankPageWarning(false);
+          }, 10000);
+        } else {
+          // Hide warning if page is not blank
+          setCurrentBlankPage(null);
+          setShowBlankPageWarning(false);
+        }
+        
+        // Legacy first page check (keep for backward compatibility)
+        if (currentPage === 1 && blank && !isFirstPageBlank) {
+          console.log('⚠️ Setting first page blank flag');
+          setIsFirstPageBlank(true);
+        }
+        
         // Update the actual scale being rendered for display
         setCurrentRenderScale(finalScale);
 
@@ -790,6 +841,41 @@ const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose
     });
   }, [accumulatedTime, accumulatedPages, currentPage]);
 
+  // Debug effect to track warning states
+  useEffect(() => {
+    console.log('Warning states:', { showBlankPageWarning, currentBlankPage, blankPages, currentPage });
+  }, [showBlankPageWarning, currentBlankPage, blankPages, currentPage]);
+
+  // Function to detect if a page is blank
+  const isPageBlank = (canvas) => {
+    const context = canvas.getContext('2d');
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    // Method 1: All pixels nearly the same
+    let firstPixel = [data[0], data[1], data[2], data[3]];
+    let diffPixels = 0;
+    let sum = 0, sumSq = 0, n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) {
+      let avg = (data[i] + data[i+1] + data[i+2]) / 3;
+      sum += avg;
+      sumSq += avg * avg;
+      if (
+        Math.abs(data[i] - firstPixel[0]) > 5 ||
+        Math.abs(data[i+1] - firstPixel[1]) > 5 ||
+        Math.abs(data[i+2] - firstPixel[2]) > 5 ||
+        Math.abs(data[i+3] - firstPixel[3]) > 5
+      ) {
+        diffPixels++;
+        if (diffPixels > 10) break;
+      }
+    }
+    let mean = sum / n;
+    let variance = sumSq / n - mean * mean;
+    let stddev = Math.sqrt(variance);
+    console.log('Blank page detection:', { diffPixels, stddev, mean });
+    return diffPixels <= 10 || stddev < 5;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center w-full h-full min-h-screen bg-black">
@@ -867,6 +953,20 @@ const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
+          
+          {/* Blank Page Check Button */}
+          {blankPages[currentPage] && (
+            <button
+              onClick={() => setShowBlankPageWarning(true)}
+              className="px-3 py-1 sm:px-4 sm:py-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 transition-colors duration-200 text-sm sm:text-base flex items-center"
+              title="Show blank page warning"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              Blank Page
+            </button>
+          )}
         </div>
         <div className="flex items-center space-x-2 sm:space-x-4">
           <button
@@ -923,7 +1023,7 @@ const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose
       </div>
 
       {/* PDF Viewer with Loading State */}
-      <div ref={viewerRef} className="flex-1 overflow-auto p-4 flex justify-center items-center relative">
+      <div ref={viewerRef} className="flex-1 overflow-auto p-4 flex justify-center relative">
         {loading && (
           <div className="absolute inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-10">
             <div className="flex flex-col items-center">
@@ -946,13 +1046,39 @@ const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose
             </div>
           </div>
         )}
-        <div className="max-w-full max-h-full overflow-hidden shadow-xl rounded-lg bg-white dark:bg-gray-800 flex justify-center items-center w-11/12 mx-auto relative">
-          <canvas ref={canvasRef} className="block" />
-          {pdfRendering && (
-            <div className="absolute inset-0 bg-gray-900 bg-opacity-30 flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-zinc-400"></div>
+        
+        {/* Blank Page Warning */}
+        {showBlankPageWarning && (
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-500 text-black p-6 rounded-lg shadow-lg max-w-md text-center z-20 animate-pulse border-2 border-yellow-600">
+            <div className="flex items-center space-x-2 mb-3">
+              <svg className="w-8 h-8 text-yellow-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <p className="font-bold text-xl">⚠️ Page {currentBlankPage} appears blank!</p>
             </div>
-          )}
+            <p className="text-base mt-3 font-medium mb-4">Please navigate to the next page to see the content</p>
+            <div className="mt-3 text-sm text-yellow-800 mb-4">
+              <p>Current page: {currentPage} | Total pages: {numPages}</p>
+              <p>Detection sensitivity: 85% white or 90% light pixels</p>
+            </div>
+            <button
+              onClick={() => setShowBlankPageWarning(false)}
+              className="px-6 py-3 bg-yellow-600 text-white rounded-lg text-base hover:bg-yellow-700 transition-colors font-medium"
+            >
+              Dismiss Warning
+            </button>
+          </div>
+        )}
+        
+        <div className="w-full max-w-4xl mx-auto">
+          <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg overflow-hidden">
+            <canvas ref={canvasRef} className="block w-full" />
+            {pdfRendering && (
+              <div className="absolute inset-0 bg-gray-900 bg-opacity-30 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-zinc-400"></div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

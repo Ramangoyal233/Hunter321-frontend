@@ -74,20 +74,20 @@ export const fetchCategory = async (id) => {
   return response.data;
 };
 
-export const updateSubcategory = async (categoryId, subcategoryId, subcategoryData) => {
+export const updateSubcategory = async (subcategoryId, subcategoryData) => {
   const headers = getAuthHeaders();
   if (!headers.Authorization) {
     throw new Error('No token found');
   }
-  const response = await axios.put(`${API_URL}/categories/${categoryId}/subcategories/${subcategoryId}`, subcategoryData, { headers });
+  const response = await axios.put(`${API_URL}/subcategories/${subcategoryId}`, subcategoryData, { headers });
   return response.data;
 };
 
-export const deleteSubcategory = async (categoryId, subcategoryId) => {
+export const deleteSubcategory = async (subcategoryId) => {
   const headers = getAuthHeaders();
   if (!headers.Authorization) {
     throw new Error('No token found');
   }
-  const response = await axios.delete(`${API_URL}/categories/${categoryId}/subcategories/${subcategoryId}`, { headers });
+  const response = await axios.delete(`${API_URL}/subcategories/${subcategoryId}`, { headers });
   return response.data;
 }; 
