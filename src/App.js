@@ -448,9 +448,9 @@ const AppContent = () => {
       {/* Main Content */}
       <div className="relative z-20 min-h-screen">
         {/* Header - Always visible */}
-        <div className="fixed top-0 left-1/2 transform -translate-x-1/2 z-50 w-[90%] sm:w-[80%] max-w-5xl mt-4">
+        <div className="fixed top-0 left-1/2 transform -translate-x-1/2 z-50 w-[98%] sm:w-[90%] md:w-[80%] max-w-5xl mt-2 sm:mt-4">
           <div 
-            className="transition-all duration-300 rounded-[2rem] px-4 sm:px-8 py-2.5 flex items-center gap-4 border-2 transform-gpu mobile-header-3d"
+            className="transition-all duration-300 rounded-[2rem] px-2 sm:px-4 md:px-8 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-4 border-2 transform-gpu mobile-header-3d"
             style={{
               ...getHeaderStyle(),
               transform: isScrolled ? 'translateY(0) scale(1.02)' : 'translateY(0) scale(1)',
@@ -501,7 +501,7 @@ const AppContent = () => {
                 <div className={`h-6 w-px transition-all duration-300 hidden md:block ${isScrolled ? 'bg-gradient-to-b from-blue-500/50 to-transparent' : 'bg-gradient-to-b from-gray-700 to-transparent'}`}></div>
 
                 {/* User/Admin Profile and Logout */}
-                <div className="hidden md:flex items-center gap-4">
+                <div className="hidden lg:flex items-center gap-4">
                   <div className="flex items-center gap-2 transform-gpu hover:scale-105 transition-transform duration-300">
                     <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shadow-lg shadow-blue-500/20">
                       <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

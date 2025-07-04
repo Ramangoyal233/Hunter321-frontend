@@ -1072,7 +1072,7 @@ const PDFReader = ({ bookId, onPageChange, currentPage: initialPage = 1, onClose
         
         <div className="w-full max-w-4xl mx-auto">
           <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg overflow-hidden">
-            <canvas ref={canvasRef} className="block w-full" />
+            <canvas ref={canvasRef} className="block mx-auto" style={{ display: 'block', margin: '0 auto' }} />
             {pdfRendering && (
               <div className="absolute inset-0 bg-gray-900 bg-opacity-30 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-zinc-400"></div>

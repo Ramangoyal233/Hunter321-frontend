@@ -387,7 +387,7 @@ const HomePage = () => {
               transition={{ delay: 0.2, duration: 0.8 }}
             >
               <span className="bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                CTF Writeups
+                BugBounty Writeups
               </span>
             </motion.h1>
 
@@ -399,7 +399,7 @@ const HomePage = () => {
               transition={{ delay: 0.4, duration: 0.8 }}
             >
               Discover, learn, and share your knowledge with the cybersecurity community.
-              Explore our collection of CTF writeups and enhance your skills.
+              Explore our collection of BugBounty writeups and enhance your skills.
             </motion.p>
 
             {/* Animated Buttons */}

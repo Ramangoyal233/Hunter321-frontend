@@ -27,6 +27,8 @@ const getImageUrl = (imagePath) => {
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
     return imagePath;
   }
+  console.log(imagePath);
+  console.log(`${API_BASE_URL}${imagePath}`);
   // Otherwise, prepend the API base URL
   return `${API_BASE_URL}${imagePath}`;
 };

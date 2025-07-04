@@ -61,8 +61,8 @@ const WriteupsPage = () => {
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(writeup =>
-        writeup.title.toLowerCase().includes(searchLower) ||
-        writeup.content.toLowerCase().includes(searchLower)
+        (writeup.title?.toLowerCase() || '').includes(searchLower) ||
+        (writeup.content?.toLowerCase() || '').includes(searchLower)
       );
     }
 
@@ -479,7 +479,7 @@ const WriteupsPage = () => {
         </motion.div>
 
         {/* Writeups Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 justify-items-center">
           {filteredWriteups.map((writeup, index) => {
             const writeupObj = writeup.toObject ? writeup.toObject() : writeup;
             const userReadEntry = writeupObj.readBy?.find(entry => entry.user === user?._id || entry.user?._id === user?._id);
@@ -491,30 +491,31 @@ const WriteupsPage = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 hover:border-blue-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/10 w-full h-full flex flex-col"
+                className="relative rounded-3xl overflow-hidden border border-blue-700/30 shadow-2xl shadow-blue-900/20 hover:shadow-blue-500/30 hover:scale-[1.025] transition-all duration-300 w-full h-full flex flex-col backdrop-blur-xl max-w-full md:max-w-[95vw] lg:max-w-[370px] xl:max-w-[420px] mx-auto"
+                style={{ minHeight: '370px' }}
               >
-                <div className="flex flex-col h-full p-5">
+                <div className="relative z-10 flex flex-col h-full p-6">
                   {/* Header Row */}
-                  <div className="flex items-center justify-between mb-3 gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-600/20 text-green-400">
+                  <div className="flex items-center justify-between mb-4 gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-green-600/30 to-emerald-600/30 text-green-300 shadow-sm shadow-green-500/10">
                       {writeupObj.difficulty}
                     </span>
-                    <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-blue-600/20 text-blue-300">
+                    <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-600/30 to-blue-800/30 text-blue-200 shadow-sm shadow-blue-500/10">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                       {writeupObj.reads || 0} reads
                     </span>
                     {writeupObj.bounty?.amount > 0 && (
-                      <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-yellow-600/20 text-yellow-400">
+                      <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-yellow-500/30 to-yellow-700/30 text-yellow-300 shadow-sm shadow-yellow-500/10">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        ${writeupObj.bounty.amount}
+                        <span className="font-bold">${writeupObj.bounty.amount.toLocaleString()}</span>
                       </span>
                     )}
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-xl font-bold text-white mb-2 line-clamp-2 hover:text-blue-400 transition flex-grow">
+                  <div className="font-extrabold text-lg sm:text-xl break-words whitespace-normal text-white mb-1 drop-shadow-lg">
                     {writeupObj.title}
-                  </h3>
+                  </div>
 
                   {/* Meta Row */}
                   <div className="flex items-center gap-4 text-xs text-zinc-400 mb-2">
@@ -529,35 +530,39 @@ const WriteupsPage = () => {
                   </div>
 
                   {/* Tags */}
-                  <div className="flex flex-wrap gap-1 mb-2">
+                  <div className="flex flex-wrap gap-2 mb-2">
                     {writeupObj.tags && writeupObj.tags.slice(0, 3).map((tag, idx) => (
-                      <span key={idx} className="bg-blue-800/30 text-blue-200 px-2 py-0.5 rounded-full text-xs font-medium">#{tag}</span>
+                      <span key={idx} className="bg-gradient-to-r from-blue-700/60 to-blue-900/60 text-blue-100 px-2 py-0.5 rounded-full text-xs font-semibold shadow shadow-blue-900/10">#{tag}</span>
                     ))}
                     {writeupObj.tags && writeupObj.tags.length > 3 && (
-                      <span className="text-xs text-zinc-500">+{writeupObj.tags.length - 3} more</span>
+                      <span className="text-xs text-zinc-400">+{writeupObj.tags.length - 3} more</span>
                     )}
                   </div>
 
                   {/* Category/Subcategory */}
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    <span className="px-2 py-0.5 bg-zinc-800 rounded-full text-xs text-zinc-300">{writeupObj.category.name}</span>
-                    {writeupObj.subcategory && (
-                      <span className="px-2 py-0.5 bg-zinc-800 rounded-full text-xs text-zinc-300">{writeupObj.subcategory.name}</span>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="px-2 py-0.5 bg-gradient-to-r from-zinc-700/60 to-zinc-900/60 rounded-full text-xs text-zinc-200 font-semibold shadow shadow-zinc-900/10">{writeupObj.category?.name || "No Category"}</span>
+                    {writeupObj.subcategory?.name && (
+                      <span className="px-2 py-0.5 bg-gradient-to-r from-purple-700/60 to-pink-900/60 rounded-full text-xs text-pink-100 font-semibold shadow shadow-pink-900/10">{writeupObj.subcategory.name}</span>
                     )}
                   </div>
 
                   {/* Action Button */}
                   <button
                     onClick={() => handleReadWriteup(writeupObj._id, writeupObj.platformUrl)}
-                    className={`mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-semibold text-base transition-all duration-300 ${hasRead ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
+                    className={`mt-auto w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-base transition-all duration-300 shadow-lg
+                      ${hasRead
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600'
+                        : 'bg-gradient-to-r from-blue-500 to-blue-700 text-white hover:from-blue-600 hover:to-blue-800'}
+                      hover:scale-105`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                     {hasRead ? 'Read Again' : 'Read Writeup'}
                   </button>
 
                   {/* Last Read */}
                   {hasRead && lastReadTime && (
-                    <div className="mt-2 text-xs text-green-300 text-center">
+                    <div className="mt-3 text-xs text-green-300 text-center font-mono">
                       Last read: {lastReadTime.toLocaleString()}
                     </div>
                   )}

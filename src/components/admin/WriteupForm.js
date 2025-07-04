@@ -8,10 +8,6 @@ import { motion } from 'framer-motion';
 // Predefined tags for different categories
 const PREDEFINED_TAGS = {
   'Web Application': ['XSS', 'SQL Injection', 'CSRF', 'File Upload', 'Authentication', 'Authorization', 'Business Logic', 'IDOR', 'SSRF', 'Open Redirect'],
-  'Mobile Application': ['Android', 'iOS', 'Deep Link', 'Intent', 'WebView', 'Certificate Pinning', 'Code Injection', 'Data Storage'],
-  'API Security': ['JWT', 'OAuth', 'Rate Limiting', 'Input Validation', 'Mass Assignment', 'GraphQL', 'REST', 'SOAP'],
-  'Network Security': ['Port Scanning', 'DNS', 'Subdomain Enumeration', 'Network Enumeration', 'Wireless', 'Bluetooth'],
-  'Cloud Security': ['AWS', 'Azure', 'GCP', 'S3', 'IAM', 'Lambda', 'Container', 'Kubernetes', 'Docker'],
   'General': ['Reconnaissance', 'Information Disclosure', 'Privilege Escalation', 'Remote Code Execution', 'Local File Inclusion', 'Directory Traversal']
 };
 
@@ -86,6 +82,10 @@ const WriteupForm = ({ writeup, onSubmit }) => {
     }
   }, [formData.category]);
 
+  useEffect(() => {
+    console.log(formData);
+  }, [formData]);
+
   const fetchCategories = async () => {
     try {
       setLoading(true);
@@ -118,6 +118,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
       const subcategoriesRes = await axios.get(
        `${API_BASE_URL}/api/categories/${categoryId}/subcategories`
       );
+      console.log("subcategoriesRes", subcategoriesRes.data.subcategories);
       setSubcategories(subcategoriesRes.data.subcategories || []);
    
     } catch (error) {
@@ -138,7 +139,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
       ]);
 
       setCategories(categoriesRes.data.categories || []);
-      setSubcategories(subcategoriesRes.data.subcategories || []);
+      
       setLoading(false);
     } catch (error) {
       setError(error.message || 'Error fetching categories and subcategories');
@@ -218,8 +219,8 @@ const WriteupForm = ({ writeup, onSubmit }) => {
         return;
       }
 
-      if (!formData.category || !formData.subcategory) {
-        toast.error('Please select a category and subcategory');
+      if (!formData.category) {
+        toast.error('Please select a category');
         setSubmitting(false);
         return;
       }
@@ -228,8 +229,8 @@ const WriteupForm = ({ writeup, onSubmit }) => {
       const selectedCategory = categories.find(cat => cat._id === formData.category);
       const selectedSubcategory = subcategories.find(sub => sub._id === formData.subcategory);
 
-      if (!selectedCategory || !selectedSubcategory) {
-        toast.error('Invalid category or subcategory selection');
+      if (!selectedCategory) {
+        toast.error('Invalid category selection');
         setSubmitting(false);
         return;
       }
@@ -239,7 +240,7 @@ const WriteupForm = ({ writeup, onSubmit }) => {
         title: formData.title,
         description: formData.description,
         category: selectedCategory._id,
-        subcategory: selectedSubcategory._id,
+        subcategory: selectedSubcategory ? selectedSubcategory._id : '',
         difficulty: formData.difficulty.charAt(0).toUpperCase() + formData.difficulty.slice(1),
         platform: formData.platform || '',
         platformUrl: formData.platformUrl || '',

@@ -142,9 +142,9 @@ const RecentWriteups = () => {
                   {writeup.platform}
                 </span>
                 <span className="px-2 py-0.5 bg-zinc-800 rounded-full text-xs text-zinc-300">
-                  {writeup.category.name}
+                  {writeup.category?.name || "No Category"}
                 </span>
-                {writeup.subcategory && (
+                {writeup.subcategory?.name && (
                   <span className="px-2 py-0.5 bg-zinc-800 rounded-full text-xs text-zinc-300">
                     {writeup.subcategory.name}
                   </span>
